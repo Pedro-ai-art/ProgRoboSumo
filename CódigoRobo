@@ -1,0 +1,174 @@
+#include <IRremote.h> // Inclui a biblioteca para o controle remoto
+
+// ==========================================
+// MAPA DE PINOS - ROBÔ SUMÔ
+// ==========================================
+
+// --- MOTORES (Ponte H L298N) ---
+int motorEsqFrente = 2;   
+int motorEsqTras = 4;     
+int motorEsqVeloc = 3;    // PWM
+
+int motorDirFrente = 7;   
+int motorDirTras = 8;     
+int motorDirVeloc = 5;    // PWM
+
+// --- SENSORES DE LINHA (TCRT5000) ---
+int sensorLinhaEsq = 9;   
+int sensorLinhaDir = 10;  
+
+// --- SENSOR ULTRASSÔNICO (HC-SR04) ---
+int pinoTrig = 11;        
+int pinoEcho = 12;        
+
+// --- CONTROLE REMOTO (VS1838B) ---
+int pinoInfra = 6;        
+IRrecv irrecv(pinoInfra); // Prepara o receptor IR no pino 6
+decode_results resultadosIR; // Variável para guardar o botão apertado
+
+// ==========================================
+// VARIÁVEIS DE CONTROLE
+// ==========================================
+bool roboLigado = false; // O robô começa parado (esperando o juiz)
+int velocidadeMax = 255; // Velocidade máxima (0 a 255)
+int velocidadeBusca = 150; // Velocidade menor para ficar girando
+
+// ==========================================
+// CONFIGURAÇÃO INICIAL (Executa 1 vez)
+// ==========================================
+void setup() {
+  // Configura os pinos dos motores como SAÍDA de energia (OUTPUT)
+  pinMode(motorEsqFrente, OUTPUT);[cite: 1]
+  pinMode(motorEsqTras, OUTPUT);[cite: 1]
+  pinMode(motorEsqVeloc, OUTPUT);[cite: 1]
+  pinMode(motorDirFrente, OUTPUT);[cite: 1]
+  pinMode(motorDirTras, OUTPUT);[cite: 1]
+  pinMode(motorDirVeloc, OUTPUT);[cite: 1]
+
+  // Configura os pinos dos sensores de linha como ENTRADA de leitura (INPUT)[cite: 1]
+  pinMode(sensorLinhaEsq, INPUT);[cite: 1]
+  pinMode(sensorLinhaDir, INPUT);[cite: 1]
+
+  // Configura os pinos do Ultrassônico
+  pinMode(pinoTrig, OUTPUT); // Trigger envia o som[cite: 2, 4]
+  pinMode(pinoEcho, INPUT);  // Echo escuta o som[cite: 2, 4]
+
+  // Inicia o receptor do controle remoto
+  irrecv.enableIRIn(); 
+  
+  // Garante que os motores comecem parados
+  pararMotores();
+}
+
+// ==========================================
+// LÓGICA PRINCIPAL (Repete infinitamente)
+// ==========================================
+void loop() {
+  // 1. CHECA O CONTROLE REMOTO DO JUIZ
+  if (irrecv.decode(&resultadosIR)) {
+    // Substitua os códigos "0x..." pelos códigos REAIS do controle do juiz
+    if (resultadosIR.value == 0xFF02FD) { // Exemplo: Código do botão START
+      roboLigado = true;
+    } 
+    else if (resultadosIR.value == 0xFF9867) { // Exemplo: Código do botão STOP
+      roboLigado = false;
+      pararMotores(); // Para tudo imediatamente
+    }
+    irrecv.resume(); // Prepara para ler o próximo botão
+  }
+
+  // 2. SE O ROBÔ ESTIVER AUTORIZADO A LUTAR
+  if (roboLigado == true) {
+    
+    // Lê os sensores de chão (0 = viu linha branca / 1 = chão preto seguro)
+    // Nota: O valor exato (0 ou 1) depende da regulagem do seu TCRT5000
+    int leEsq = digitalRead(sensorLinhaEsq);
+    int leDir = digitalRead(sensorLinhaDir);
+
+    // Regra de Sobrevivência: Se algum sensor ver a linha branca
+    if (leEsq == LOW || leDir == LOW) { 
+      // Dá ré por meio segundo e depois gira para voltar ao centro
+      darRe();
+      delay(500); 
+      girarBuscando();
+      delay(300);
+    } 
+    else {
+      // Regra de Ataque: Se está seguro, procura o inimigo
+      long distanciaInimigo = lerDistanciaUltrassonico();
+
+      if (distanciaInimigo > 0 && distanciaInimigo < 40) { // Inimigo a menos de 40cm
+        atacarFrente(); // Vai pra cima!
+      } else {
+        girarBuscando(); // Não achou ninguém? Fica girando procurando
+      }
+    }
+  }
+}
+
+// ==========================================
+// FUNÇÕES SIMPLES DE MOVIMENTO
+// ==========================================
+
+void atacarFrente() {
+  // Liga os dois motores para frente
+  digitalWrite(motorEsqFrente, HIGH);
+  digitalWrite(motorEsqTras, LOW);
+  digitalWrite(motorDirFrente, HIGH);
+  digitalWrite(motorDirTras, LOW);
+  // Velocidade Máxima
+  analogWrite(motorEsqVeloc, velocidadeMax);
+  analogWrite(motorDirVeloc, velocidadeMax);
+}
+
+void girarBuscando() {
+  // Uma roda vai pra frente, a outra pra trás (gira no próprio eixo)
+  digitalWrite(motorEsqFrente, HIGH);
+  digitalWrite(motorEsqTras, LOW);
+  digitalWrite(motorDirFrente, LOW);
+  digitalWrite(motorDirTras, HIGH);
+  // Velocidade menor para não girar rápido demais e "pular" a leitura do sensor
+  analogWrite(motorEsqVeloc, velocidadeBusca);
+  analogWrite(motorDirVeloc, velocidadeBusca);
+}
+
+void darRe() {
+  // Liga os dois motores para trás
+  digitalWrite(motorEsqFrente, LOW);
+  digitalWrite(motorEsqTras, HIGH);
+  digitalWrite(motorDirFrente, LOW);
+  digitalWrite(motorDirTras, HIGH);
+  // Velocidade Máxima
+  analogWrite(motorEsqVeloc, velocidadeMax);
+  analogWrite(motorDirVeloc, velocidadeMax);
+}
+
+void pararMotores() {
+  // Desliga tudo
+  digitalWrite(motorEsqFrente, LOW);
+  digitalWrite(motorEsqTras, LOW);
+  digitalWrite(motorDirFrente, LOW);
+  digitalWrite(motorDirTras, LOW);
+  analogWrite(motorEsqVeloc, 0);
+  analogWrite(motorDirVeloc, 0);
+}
+
+// ==========================================
+// FUNÇÃO PARA LER O SENSOR ULTRASSÔNICO
+// ==========================================
+long lerDistanciaUltrassonico() {
+  // Envia um pulso de som[cite: 2, 4]
+  digitalWrite(pinoTrig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(pinoTrig, HIGH);
+  delayMicroseconds(10);[cite: 2, 4]
+  digitalWrite(pinoTrig, LOW);
+
+  // Calcula o tempo que o som demorou para voltar[cite: 2, 4]
+  long duracao = pulseIn(pinoEcho, HIGH);[cite: 4]
+  
+  // Transforma o tempo em centímetros (fórmula padrão)
+  long distancia = duracao * 0.034 / 2; 
+  
+  return distancia;
+}
