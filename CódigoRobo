@@ -38,20 +38,20 @@ int velocidadeBusca = 150; // Velocidade menor para ficar girando
 // ==========================================
 void setup() {
   // Configura os pinos dos motores como SAÍDA de energia (OUTPUT)
-  pinMode(motorEsqFrente, OUTPUT);[cite: 1]
-  pinMode(motorEsqTras, OUTPUT);[cite: 1]
-  pinMode(motorEsqVeloc, OUTPUT);[cite: 1]
-  pinMode(motorDirFrente, OUTPUT);[cite: 1]
-  pinMode(motorDirTras, OUTPUT);[cite: 1]
-  pinMode(motorDirVeloc, OUTPUT);[cite: 1]
+  pinMode(motorEsqFrente, OUTPUT);
+  pinMode(motorEsqTras, OUTPUT);
+  pinMode(motorEsqVeloc, OUTPUT);
+  pinMode(motorDirFrente, OUTPUT);
+  pinMode(motorDirTras, OUTPUT);
+  pinMode(motorDirVeloc, OUTPUT);
 
   // Configura os pinos dos sensores de linha como ENTRADA de leitura (INPUT)[cite: 1]
-  pinMode(sensorLinhaEsq, INPUT);[cite: 1]
-  pinMode(sensorLinhaDir, INPUT);[cite: 1]
+  pinMode(sensorLinhaEsq, INPUT);
+  pinMode(sensorLinhaDir, INPUT);
 
   // Configura os pinos do Ultrassônico
-  pinMode(pinoTrig, OUTPUT); // Trigger envia o som[cite: 2, 4]
-  pinMode(pinoEcho, INPUT);  // Echo escuta o som[cite: 2, 4]
+  pinMode(pinoTrig, OUTPUT); // Trigger envia o som
+  pinMode(pinoEcho, INPUT);  // Echo escuta o som
 
   // Inicia o receptor do controle remoto
   irrecv.enableIRIn(); 
@@ -157,15 +157,15 @@ void pararMotores() {
 // FUNÇÃO PARA LER O SENSOR ULTRASSÔNICO
 // ==========================================
 long lerDistanciaUltrassonico() {
-  // Envia um pulso de som[cite: 2, 4]
+  // Envia um pulso de som
   digitalWrite(pinoTrig, LOW);
   delayMicroseconds(2);
   digitalWrite(pinoTrig, HIGH);
-  delayMicroseconds(10);[cite: 2, 4]
+  delayMicroseconds(10);
   digitalWrite(pinoTrig, LOW);
 
-  // Calcula o tempo que o som demorou para voltar[cite: 2, 4]
-  long duracao = pulseIn(pinoEcho, HIGH);[cite: 4]
+  // Calcula o tempo que o som demorou para voltar
+  long duracao = pulseIn(pinoEcho, HIGH);
   
   // Transforma o tempo em centímetros (fórmula padrão)
   long distancia = duracao * 0.034 / 2; 
