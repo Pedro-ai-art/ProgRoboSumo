@@ -1,0 +1,210 @@
+#include <IRremote.h> // Inclui a biblioteca para o controle remoto
+
+// ==========================================
+// MAPA DE PINOS - ROBÔ SUMÔ
+// ==========================================
+
+// --- MOTORES (Ponte H L298N) ---
+int motorEsqFrente = 2;   
+int motorEsqTras = 4;     
+int motorEsqVeloc = 3;    // PWM
+
+int motorDirFrente = 7;   
+int motorDirTras = 8;     
+int motorDirVeloc = 5;    // PWM
+
+// --- SENSORES DE LINHA (TCRT5000) ---
+int sensorLinhaEsq = 9;   
+int sensorLinhaDir = 10;  
+
+// --- CONTROLE REMOTO (VS1838B) ---
+int pinoInfra = 6;        
+IRrecv irrecv(pinoInfra); // Prepara o receptor IR no pino 6
+decode_results resultadosIR; 
+
+// --- SENSORES ULTRASSÔNICOS (HC-SR04) ---
+// 1. SENSOR CENTRAL (Mantidos os pinos originais do seu código)
+int pinoTrigCentro = 11;        
+int pinoEchoCentro = 12;        
+
+// 2. SENSOR ESQUERDO (Utilizando pinos analógicos como digitais)
+int pinoTrigEsq = A0;
+int pinoEchoEsq = A1;
+
+// 3. SENSOR DIREITO (Utilizando pinos analógicos como digitais)
+int pinoTrigDir = A2;
+int pinoEchoDir = A3;
+
+// ==========================================
+// VARIÁVEIS DE CONTROLE
+// ==========================================
+bool roboLigado = false; 
+int velocidadeMax = 255; 
+int velocidadeBusca = 150; 
+
+// ==========================================
+// CONFIGURAÇÃO INICIAL
+// ==========================================
+void setup() {
+  // Configura Motores
+  pinMode(motorEsqFrente, OUTPUT);
+  pinMode(motorEsqTras, OUTPUT);
+  pinMode(motorEsqVeloc, OUTPUT);
+  pinMode(motorDirFrente, OUTPUT);
+  pinMode(motorDirTras, OUTPUT);
+  pinMode(motorDirVeloc, OUTPUT);
+
+  // Configura Sensores de Linha
+  pinMode(sensorLinhaEsq, INPUT);
+  pinMode(sensorLinhaDir, INPUT);
+
+  // Configura os 3 Sensores Ultrassônicos
+  pinMode(pinoTrigCentro, OUTPUT); 
+  pinMode(pinoEchoCentro, INPUT);  
+  pinMode(pinoTrigEsq, OUTPUT); 
+  pinMode(pinoEchoEsq, INPUT);
+  pinMode(pinoTrigDir, OUTPUT); 
+  pinMode(pinoEchoDir, INPUT);
+
+  // Inicia o receptor do controle remoto
+  irrecv.enableIRIn(); 
+  
+  // Garante que os motores comecem parados
+  pararMotores();
+}
+
+// ==========================================
+// LÓGICA PRINCIPAL
+// ==========================================
+void loop() {
+  // 1. CHECA O CONTROLE REMOTO DO JUIZ
+  if (irrecv.decode(&resultadosIR)) {
+    if (resultadosIR.value == 0xFF02FD) { 
+      roboLigado = true;
+    } 
+    else if (resultadosIR.value == 0xFF9867) { 
+      roboLigado = false;
+      pararMotores(); 
+    }
+    irrecv.resume(); 
+  }
+
+  // 2. SE O ROBÔ ESTIVER AUTORIZADO A LUTAR
+  if (roboLigado == true) {
+    
+    int leEsq = digitalRead(sensorLinhaEsq);
+    int leDir = digitalRead(sensorLinhaDir);
+
+    // Regra de Sobrevivência: Se algum sensor ver a linha branca (LOW)
+    if (leEsq == LOW || leDir == LOW) { 
+      darRe();
+      delay(500); 
+      girarBuscando();
+      delay(300);
+    } 
+    else {
+      // Regra de Ataque: Se está seguro, lê os 3 sensores
+      long distCentro = lerDistanciaUltrassonico(pinoTrigCentro, pinoEchoCentro);
+      long distEsq    = lerDistanciaUltrassonico(pinoTrigEsq, pinoEchoEsq);
+      long distDir    = lerDistanciaUltrassonico(pinoTrigDir, pinoEchoDir);
+
+      // LÓGICA DE DECISÃO COM 3 SENSORES (Inimigo a menos de 40cm)
+      if (distCentro > 0 && distCentro < 40) { 
+        atacarFrente();       // Inimigo no meio: Vai pra cima!
+      } 
+      else if (distEsq > 0 && distEsq < 40) {
+        girarEsquerda();      // Inimigo na esquerda: Gira rápido para a esquerda
+      }
+      else if (distDir > 0 && distDir < 40) {
+        girarDireita();       // Inimigo na direita: Gira rápido para a direita
+      }
+      else {
+        girarBuscando();      // Ninguém detectado: Gira lentamente procurando
+      }
+    }
+  }
+}
+
+// ==========================================
+// FUNÇÕES DE MOVIMENTO
+// ==========================================
+
+void atacarFrente() {
+  digitalWrite(motorEsqFrente, HIGH);
+  digitalWrite(motorEsqTras, LOW);
+  digitalWrite(motorDirFrente, HIGH);
+  digitalWrite(motorDirTras, LOW);
+  analogWrite(motorEsqVeloc, velocidadeMax);
+  analogWrite(motorDirVeloc, velocidadeMax);
+}
+
+void girarEsquerda() {
+  // Roda esquerda vai para trás, roda direita vai para frente
+  digitalWrite(motorEsqFrente, LOW);
+  digitalWrite(motorEsqTras, HIGH);
+  digitalWrite(motorDirFrente, HIGH);
+  digitalWrite(motorDirTras, LOW);
+  // Usa velocidade máxima para enquadrar o inimigo rapidamente
+  analogWrite(motorEsqVeloc, velocidadeMax);
+  analogWrite(motorDirVeloc, velocidadeMax);
+}
+
+void girarDireita() {
+  // Roda esquerda vai para frente, roda direita vai para trás
+  digitalWrite(motorEsqFrente, HIGH);
+  digitalWrite(motorEsqTras, LOW);
+  digitalWrite(motorDirFrente, LOW);
+  digitalWrite(motorDirTras, HIGH);
+  // Usa velocidade máxima para enquadrar o inimigo rapidamente
+  analogWrite(motorEsqVeloc, velocidadeMax);
+  analogWrite(motorDirVeloc, velocidadeMax);
+}
+
+void girarBuscando() {
+  // Gira no próprio eixo para a direita, mas com velocidade menor
+  digitalWrite(motorEsqFrente, HIGH);
+  digitalWrite(motorEsqTras, LOW);
+  digitalWrite(motorDirFrente, LOW);
+  digitalWrite(motorDirTras, HIGH);
+  analogWrite(motorEsqVeloc, velocidadeBusca);
+  analogWrite(motorDirVeloc, velocidadeBusca);
+}
+
+void darRe() {
+  digitalWrite(motorEsqFrente, LOW);
+  digitalWrite(motorEsqTras, HIGH);
+  digitalWrite(motorDirFrente, LOW);
+  digitalWrite(motorDirTras, HIGH);
+  analogWrite(motorEsqVeloc, velocidadeMax);
+  analogWrite(motorDirVeloc, velocidadeMax);
+}
+
+void pararMotores() {
+  digitalWrite(motorEsqFrente, LOW);
+  digitalWrite(motorEsqTras, LOW);
+  digitalWrite(motorDirFrente, LOW);
+  digitalWrite(motorDirTras, LOW);
+  analogWrite(motorEsqVeloc, 0);
+  analogWrite(motorDirVeloc, 0);
+}
+
+// ==========================================
+// FUNÇÃO OTIMIZADA PARA LER QUALQUER ULTRASSÔNICO
+// ==========================================
+// Agora a função recebe quais pinos devem ser lidos no momento
+long lerDistanciaUltrassonico(int pinoTrig, int pinoEcho) {
+  // Envia um pulso de som (10us em nível alto)
+  digitalWrite(pinoTrig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(pinoTrig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(pinoTrig, LOW);
+
+  // Calcula o tempo que o som demorou para voltar
+  long duracao = pulseIn(pinoEcho, HIGH);
+  
+  // Transforma o tempo em centímetros
+  long distancia = duracao * 0.034 / 2; 
+  
+  return distancia;
+}
